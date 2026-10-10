@@ -1,0 +1,26 @@
+# 依赖目录
+node_modules/
+
+# 构建产物
+dist/
+build/
+
+# 环境变量及敏感信息
+.env
+.env.*
+!.env.example
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 编辑器和系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 临时文件
+temp/
+tmp/
