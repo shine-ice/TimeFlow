@@ -5,9 +5,21 @@
   "license": "ISC",
   "author": "",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "dist/main/index.js",
   "scripts": {
+    "dev": "concurrently -k \"npm run dev -w @tf/web\" \"wait-on http://localhost:5173 && node scripts/dev-electron.cjs\"",
+    "build": "electron-vite build",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "44.7.2",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.3",
+    "wait-on": "^9.5.1"
+  }
 }

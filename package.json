@@ -7,7 +7,16 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:web": "npm run dev -w @tf/web",
+    "dev:desktop": "npm run dev -w @tf/desktop",
+    "dev:server": "npm run dev -w @tf/server",
+    "build:web": "npm run build -w @tf/web",
+    "build:desktop": "npm run build -w @tf/desktop",
+    "build:server": "npm run build -w @tf/server",
+    "build": "npm run build:web && npm run build:desktop",
+    "pack:desktop": "npm run build && npm run pack -w @tf/desktop",
+    "dist:desktop": "npm run build && npm run dist -w @tf/desktop"
   },
   "workspaces": [
     "packages/utils",
