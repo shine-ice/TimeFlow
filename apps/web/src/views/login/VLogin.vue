@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
+import { useRequest } from "@/composables/useRequest";
 
 const router = useRouter();
 const route = useRoute();
@@ -11,18 +12,13 @@ const isRegister = ref(false);
 const name = ref("");
 const email = ref("");
 const password = ref("");
-const pending = ref(false);
-const error = ref("");
 
-function toggleMode() {
-  isRegister.value = !isRegister.value;
-  error.value = "";
-}
-
-async function submit() {
-  error.value = "";
-  pending.value = true;
-  try {
+const {
+  loading: pending,
+  error,
+  run: runAuth,
+} = useRequest<void, []>(
+  async () => {
     if (isRegister.value) {
       await auth.register({
         name: name.value.trim(),
@@ -32,16 +28,27 @@ async function submit() {
     } else {
       await auth.login(email.value.trim(), password.value);
     }
-    const redirect =
-      typeof route.query.redirect === "string" ? route.query.redirect : "/";
-    router.push(redirect);
-  } catch (err: any) {
-    error.value =
-      err?.response?.data?.error ||
-      "Login failed. Please check your credentials.";
-  } finally {
-    pending.value = false;
-  }
+  },
+  {
+    // 页面使用 el-alert 显示错误，避免同时弹出 ElMessage。
+    showError: false,
+  },
+);
+
+function toggleMode() {
+  isRegister.value = !isRegister.value;
+  error.value = null;
+}
+
+async function submit() {
+  const result = await runAuth();
+
+  // run() 失败时返回 null；成功的 void 请求则返回 undefined。
+  if (error.value) return;
+
+  const redirect =
+    typeof route.query.redirect === "string" ? route.query.redirect : "/";
+  await router.push(redirect);
 }
 </script>
 
@@ -105,7 +112,7 @@ async function submit() {
             </el-button>
           </div>
         </el-form>
-        <el-alert v-if="error" :title="error" type="error" show-icon />
+        <el-alert v-if="error" :title="error.message" type="error" show-icon />
       </el-card>
     </div>
   </div>
