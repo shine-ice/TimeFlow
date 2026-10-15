@@ -6,7 +6,8 @@ export type ApiErrorCode =
   | "INVALID_CREDENTIALS"
   | "INVALID_REFRESH"
   | "INTERNAL_SERVER_ERROR"
-  | "CONFLICT";
+  | "CONFLICT"
+  | "EMAIL_EXISTS";
 
 export class ApiError extends Error {
   status: number;

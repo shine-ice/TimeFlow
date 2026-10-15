@@ -1,12 +1,21 @@
 import knex, { Knex } from "knex";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 
-dotenv.config();
+const serverRoot = path.resolve(__dirname, "../..");
+dotenv.config({ path: path.join(serverRoot, ".env") });
 
 const client = (process.env.DB_CLIENT || "sqlite3").toLowerCase();
 const isMySQL = client === "mysql2" || client === "mysql";
 const isTest = process.env.NODE_ENV === "test";
+const sqliteFile =
+  process.env.SQLITE_FILE || process.env.SQLITE_PATH || "./db/dev.sqlite3";
+const sqlitePath = path.resolve(serverRoot, sqliteFile);
+
+if (!isMySQL) {
+  fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
+}
 
 const config: Knex.Config = {
   client: isMySQL ? "mysql2" : "sqlite3",
@@ -20,10 +29,7 @@ const config: Knex.Config = {
           process.env.DB_NAME || process.env.MYSQL_DATABASE || "timeflow",
       }
     : {
-        filename:
-          process.env.SQLITE_FILE ||
-          process.env.SQLITE_PATH ||
-          path.resolve(process.cwd(), "dev.sqlite3"),
+        filename: sqlitePath,
       },
   useNullAsDefault: !isMySQL,
   pool: {
