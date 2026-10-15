@@ -51,9 +51,13 @@ export function err(
   message?: string,
   data: unknown | null = null,
 ) {
-  return { code, message: message || code, data };
+  return data
+    ? { code, message: message || code, data }
+    : { code, message: message || code };
 }
 
 export function ok<T>(data: T, message = "操作成功") {
-  return { code: ApiCode.SUCCESS, message, data };
+  return data
+    ? { code: ApiCode.SUCCESS, message, data }
+    : { code: ApiCode.SUCCESS, message };
 }

@@ -27,9 +27,11 @@ export const AuthController = {
       updated_at: now,
     });
 
-    return res.status(201).json(ok({
-      user: { id: inserted.id, email: inserted.email, name: inserted.name },
-    }));
+    return res.status(201).json(
+      ok({
+        user: { id: inserted.id, email: inserted.email, name: inserted.name },
+      }),
+    );
   },
 
   async login(req: Request, res: Response) {
@@ -49,10 +51,12 @@ export const AuthController = {
 
     const deviceId = input.deviceId || `web-${Date.now()}`;
     const tokens = await AuthService.issueToken(user.id, deviceId);
-    return res.json(ok({
-      ...tokens,
-      user: { id: user.id, email: user.email, name: user.name },
-    }));
+    return res.json(
+      ok({
+        tokens,
+        user: { id: user.id, email: user.email, name: user.name },
+      }),
+    );
   },
 
   async refresh(req: Request, res: Response) {
@@ -60,10 +64,11 @@ export const AuthController = {
 
     try {
       const rotated = await AuthService.rotateRefreshToken(input.refreshToken);
-      return res.json(ok({
-        accessToken: rotated.accessToken,
-        refreshToken: rotated.refreshToken,
-      }));
+      return res.json(
+        ok({
+          tokens: rotated,
+        }),
+      );
     } catch {
       throw new ApiError(ApiCode.AUTH_INVALID_REFRESH_TOKEN);
     }

@@ -20,7 +20,7 @@ export function authRequired(
       sub?: string;
       deviceId?: string;
     };
-    const userId = Number(payload.sub);
+    const userId = payload.sub;
 
     if (!userId) {
       throw new ApiError(ApiCode.AUTH_UNAUTHORIZED, "Invalid token");
