@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
 import { UserRepo } from "../models/repositories/user.repo";
-import { ApiError } from "../utils/errors";
+import { ApiCode, ApiError, ok } from "../utils/errors";
 import {
   LoginSchema,
   RegisterSchema,
@@ -13,7 +13,7 @@ export const AuthController = {
     const input = RegisterSchema.parse(req.body);
     const exist = await UserRepo.findByEmail(input.email);
     if (exist) {
-      throw new ApiError(409, "EMAIL_EXISTS");
+      throw new ApiError(ApiCode.USER_EMAIL_EXISTS);
     }
 
     const now = new Date().toISOString();
@@ -27,32 +27,32 @@ export const AuthController = {
       updated_at: now,
     });
 
-    return res.status(201).json({
+    return res.status(201).json(ok({
       user: { id: inserted.id, email: inserted.email, name: inserted.name },
-    });
+    }));
   },
 
   async login(req: Request, res: Response) {
     const input = LoginSchema.parse(req.body);
     const user = await UserRepo.findByEmail(input.email);
     if (!user) {
-      throw new ApiError(401, "INVALID_CREDENTIALS");
+      throw new ApiError(ApiCode.AUTH_INVALID_CREDENTIALS);
     }
 
-    const ok = await AuthService.verifyPassword(
+    const isPasswordValid = await AuthService.verifyPassword(
       input.password,
       user.password_hash,
     );
-    if (!ok) {
-      throw new ApiError(401, "INVALID_CREDENTIALS");
+    if (!isPasswordValid) {
+      throw new ApiError(ApiCode.AUTH_INVALID_CREDENTIALS);
     }
 
     const deviceId = input.deviceId || `web-${Date.now()}`;
     const tokens = await AuthService.issueToken(user.id, deviceId);
-    return res.json({
+    return res.json(ok({
       ...tokens,
       user: { id: user.id, email: user.email, name: user.name },
-    });
+    }));
   },
 
   async refresh(req: Request, res: Response) {
@@ -60,12 +60,12 @@ export const AuthController = {
 
     try {
       const rotated = await AuthService.rotateRefreshToken(input.refreshToken);
-      return res.json({
+      return res.json(ok({
         accessToken: rotated.accessToken,
         refreshToken: rotated.refreshToken,
-      });
+      }));
     } catch {
-      throw new ApiError(401, "INVALID_REFRESH");
+      throw new ApiError(ApiCode.AUTH_INVALID_REFRESH_TOKEN);
     }
   },
 
@@ -76,6 +76,6 @@ export const AuthController = {
         req.auth.deviceId,
       );
     }
-    return res.json({ ok: true });
+    return res.json(ok({ ok: true }));
   },
 };
