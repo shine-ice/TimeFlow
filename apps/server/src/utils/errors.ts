@@ -9,6 +9,7 @@ export const ApiCode = {
   CONFLICT: "CONFLICT",
   USER_EMAIL_EXISTS: "USER_EMAIL_EXISTS",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  TASK_NOT_FOUND: "TASK_NOT_FOUND",
 } as const;
 
 export type ApiErrorCode = Exclude<
@@ -26,6 +27,7 @@ const apiErrorStatus: Record<ApiErrorCode, number> = {
   [ApiCode.CONFLICT]: 409,
   [ApiCode.USER_EMAIL_EXISTS]: 409,
   [ApiCode.INTERNAL_ERROR]: 500,
+  [ApiCode.TASK_NOT_FOUND]: 404,
 };
 
 export class ApiError extends Error {
