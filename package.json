@@ -22,6 +22,7 @@
     "packages/utils",
     "apps/web",
     "apps/server",
-    "apps/desktop"
+    "apps/desktop",
+    "packages/types"
   ]
 }
