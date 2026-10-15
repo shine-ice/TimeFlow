@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { normalizeRequestError, type RequestError } from "@/api/http";
 
@@ -10,21 +10,32 @@ interface UseRequestOptions<T> {
   onError?: (error: RequestError) => void;
 }
 
-export function useRequest<T = any, P extends any[] = any[]>(
+export function useRequest<T = unknown, P extends unknown[] = unknown[]>(
   requestFn: (...args: P) => Promise<T>,
   options: UseRequestOptions<T> = {},
 ) {
-  const loading = ref(false);
+  const pendingCount = ref(0);
+  const loading = computed(() => pendingCount.value > 0);
   const error = ref<RequestError | null>(null);
   const data = ref<T | null>(null);
 
+  let latestRequestId = 0;
+
   const run = async (...args: P): Promise<T | null> => {
-    loading.value = true;
-    error.value = null;
+    const requestId = ++latestRequestId;
+    pendingCount.value += 1;
+
+    // 新请求开始时清除上次错误
+    if (requestId === latestRequestId) {
+      error.value = null;
+    }
 
     try {
       const result = await requestFn(...args);
-      data.value = result;
+
+      if (requestId === latestRequestId) {
+        data.value = result;
+      }
 
       options.onSuccess?.(result);
 
@@ -35,22 +46,23 @@ export function useRequest<T = any, P extends any[] = any[]>(
       return result;
     } catch (err: unknown) {
       const normalizedError = normalizeRequestError(err);
-      error.value = normalizedError;
 
-      const message =
-        options.errorMessage ||
-        normalizedError.message ||
-        "Request failed, please try again later";
+      if (requestId === latestRequestId) {
+        error.value = normalizedError;
+      }
 
       if (options.showError !== false) {
-        ElMessage.error(message);
+        ElMessage.error(
+          options.errorMessage ||
+            normalizedError.message ||
+            "Request failed, please try again later",
+        );
       }
 
       options.onError?.(normalizedError);
-
       return null;
     } finally {
-      loading.value = false;
+      pendingCount.value -= 1;
     }
   };
 
