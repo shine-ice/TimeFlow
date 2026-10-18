@@ -1,5 +1,5 @@
 // db
-export type SyncChangeRow = {
+export type SyncChangeDbRow = {
   id: string;
   user_id: string;
   entity_type: string;
@@ -12,7 +12,7 @@ export type SyncChangeRow = {
   mutation_id?: string | null;
 };
 
-export type SyncUserVersionRow = {
+export type SyncUserVersionDbRow = {
   user_id: string;
   last_version: number;
   updated_at: string;
@@ -25,7 +25,7 @@ export type SyncChangeCreateInput = {
   entityId: string;
   op: string;
   version: number;
-  payload: any;
+  payload: unknown;
   deviceId: string;
   mutationId: string;
 };

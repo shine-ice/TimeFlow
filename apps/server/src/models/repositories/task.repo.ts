@@ -1,109 +1,167 @@
 import type { Knex } from "knex";
-import { db } from "../../db/knex";
-import { TaskRow } from "../types/task.type";
+import type {
+  Task,
+  TaskCreateInput,
+  TaskDbRow,
+  TaskPatch,
+} from "../types/task.type";
 
 type DbExecutor = Knex | Knex.Transaction;
 
+type TaskIdentity = {
+  userId: string;
+  taskId: string;
+};
+
+type TaskPageParams = {
+  userId: string;
+  page: number;
+  pageSize: number;
+};
+
+function toTask(row: TaskDbRow): Task {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    description: row.description,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    isCompleted: row.is_completed,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    syncVersion: row.sync_version,
+  };
+}
+
+function toTaskDbPatch(patch: TaskPatch): Partial<TaskDbRow> {
+  const dbPatch: Partial<TaskDbRow> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title;
+  if (patch.description !== undefined) dbPatch.description = patch.description;
+  if (patch.startAt !== undefined) dbPatch.start_at = patch.startAt;
+  if (patch.endAt !== undefined) dbPatch.end_at = patch.endAt;
+  if (patch.isCompleted !== undefined) dbPatch.is_completed = patch.isCompleted;
+  if (patch.completedAt !== undefined) dbPatch.completed_at = patch.completedAt;
+  return dbPatch;
+}
+
+async function findTask(
+  executor: DbExecutor,
+  { userId, taskId }: TaskIdentity,
+  includeDeleted: boolean,
+) {
+  const query = executor<TaskDbRow>("tasks").where({
+    user_id: userId,
+    id: taskId,
+  });
+  if (!includeDeleted) query.whereNull("deleted_at");
+  const row = await query.first();
+  return row ? toTask(row) : undefined;
+}
+
 export const TaskRepo = {
-  async findById(userId: string, taskId: string, executor: DbExecutor = db) {
-    return await executor<TaskRow>("tasks")
-      .where({ user_id: userId, id: taskId })
-      .whereNull("deleted_at")
-      .first();
+  async findById(executor: DbExecutor, params: TaskIdentity) {
+    return findTask(executor, params, false);
   },
 
-  async findByIdIncludingDeleted(
-    userId: string,
-    taskId: string,
-    executor: DbExecutor = db,
-  ) {
-    return await executor<TaskRow>("tasks")
-      .where({ user_id: userId, id: taskId })
-      .first();
+  async findByIdIncludingDeleted(executor: DbExecutor, params: TaskIdentity) {
+    return findTask(executor, params, true);
   },
 
   async findByIdIncludingDeletedForUpdate(
-    userId: string,
-    taskId: string,
     executor: Knex.Transaction,
+    { userId, taskId }: TaskIdentity,
   ) {
-    return executor<TaskRow>("tasks")
+    const row = await executor<TaskDbRow>("tasks")
       .where({ user_id: userId, id: taskId })
       .forUpdate()
       .first();
+    return row ? toTask(row) : undefined;
   },
 
-  async listByUserId(userId: string, page: number, pageSize: number) {
+  async listByUserId(
+    executor: DbExecutor,
+    { userId, page, pageSize }: TaskPageParams,
+  ) {
     const offset = (page - 1) * pageSize;
 
-    const items = await db<TaskRow>("tasks")
+    const rows = await executor<TaskDbRow>("tasks")
       .where({ user_id: userId })
       .whereNull("deleted_at")
       .orderBy("updated_at", "desc")
       .offset(offset)
       .limit(pageSize);
 
-    const [{ total }] = await db<TaskRow>("tasks")
+    const [{ total }] = await executor<TaskDbRow>("tasks")
       .where({ user_id: userId })
       .whereNull("deleted_at")
       .count({ total: "*" });
 
     return {
-      items,
+      items: rows.map(toTask),
       total: Number(total || 0),
     };
   },
 
   async createWithId(
-    userId: string,
-    taskId: string,
-    task: Partial<TaskRow>,
-    syncVersion: number,
-    executor: DbExecutor = db,
+    executor: DbExecutor,
+    {
+      userId,
+      taskId,
+      task,
+      syncVersion,
+    }: TaskIdentity & { task: TaskCreateInput; syncVersion: number },
   ) {
     const now = new Date().toISOString();
-    await executor<TaskRow>("tasks").insert({
-      ...task,
+    await executor<TaskDbRow>("tasks").insert({
+      ...toTaskDbPatch(task),
       id: taskId,
       user_id: userId,
+      title: task.title,
       description: task.description ?? "",
-      is_completed: task.is_completed ?? 0,
+      is_completed: task.isCompleted ?? 0,
       created_at: now,
       updated_at: now,
       deleted_at: null,
       sync_version: syncVersion,
     });
-    return executor<TaskRow>("tasks")
-      .where({ user_id: userId, id: taskId })
-      .first();
+    return findTask(executor, { userId, taskId }, true);
   },
 
   async updateForSync(
-    userId: string,
-    taskId: string,
-    patch: Partial<TaskRow>,
-    syncVersion: number,
-    executor: DbExecutor = db,
+    executor: DbExecutor,
+    {
+      userId,
+      taskId,
+      patch,
+      syncVersion,
+    }: TaskIdentity & { patch: TaskPatch; syncVersion: number },
   ) {
     const now = new Date().toISOString();
-    const updated = await executor<TaskRow>("tasks")
+    const updated = await executor<TaskDbRow>("tasks")
       .where({ user_id: userId, id: taskId })
       .whereNull("deleted_at")
-      .update({ ...patch, updated_at: now, sync_version: syncVersion });
+      .update({
+        ...toTaskDbPatch(patch),
+        updated_at: now,
+        sync_version: syncVersion,
+      });
     if (!updated) return undefined;
-    return executor<TaskRow>("tasks")
-      .where({ user_id: userId, id: taskId })
-      .first();
+    return findTask(executor, { userId, taskId }, true);
   },
 
   async softDeleteForSync(
-    userId: string,
-    taskId: string,
-    deletedAt: string,
-    syncVersion: number,
-    executor: DbExecutor = db,
+    executor: DbExecutor,
+    {
+      userId,
+      taskId,
+      deletedAt,
+      syncVersion,
+    }: TaskIdentity & { deletedAt: string; syncVersion: number },
   ) {
-    return executor<TaskRow>("tasks")
+    return executor<TaskDbRow>("tasks")
       .where({ user_id: userId, id: taskId })
       .whereNull("deleted_at")
       .update({

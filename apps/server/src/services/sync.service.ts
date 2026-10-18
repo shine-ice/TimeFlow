@@ -1,7 +1,8 @@
+import { db } from "../db/knex";
 import { runTransaction } from "../db/transaction";
 import { SyncRepo } from "../models/repositories/sync.repo";
 import { TaskRepo } from "../models/repositories/task.repo";
-import type { TaskRow } from "../models/types/task.type";
+import type { Task, TaskPatch } from "../models/types/task.type";
 import { WsHub } from "../ws/hub";
 
 export type PushChange = {
@@ -11,20 +12,20 @@ export type PushChange = {
   op: "create" | "update" | "delete";
   baseVersion: number;
   clientUpdatedAt?: string;
-  patch?: Partial<TaskRow>;
+  patch?: TaskPatch;
 };
 
 const writableTaskFields = [
   "title",
   "description",
-  "start_at",
-  "end_at",
-  "is_completed",
-  "completed_at",
+  "startAt",
+  "endAt",
+  "isCompleted",
+  "completedAt",
 ] as const;
 
-function sanitizeTaskPatch(patch: Partial<TaskRow> | undefined) {
-  const clean: Partial<TaskRow> = {};
+function sanitizeTaskPatch(patch: TaskPatch | undefined) {
+  const clean: TaskPatch = {};
   for (const field of writableTaskFields) {
     if (patch?.[field] !== undefined) clean[field] = patch[field] as never;
   }
@@ -33,22 +34,21 @@ function sanitizeTaskPatch(patch: Partial<TaskRow> | undefined) {
 
 export const SyncService = {
   async pull(userId: string, sinceVersion: number, pageSize: number) {
-    return SyncRepo.pullSince(userId, sinceVersion, pageSize);
+    return SyncRepo.pullSince(db, { userId, sinceVersion, pageSize });
   },
 
   async push(userId: string, deviceId: string, changes: PushChange[]) {
     const transactionResult = await runTransaction(async (trx) => {
       const results: any[] = [];
-      let lastVersion = await SyncRepo.lockUserVersion(userId, trx);
+      let lastVersion = await SyncRepo.lockUserVersion(trx, { userId });
       let didWrite = false;
 
       for (const change of changes) {
-        const previous = await SyncRepo.findMutation(
+        const previous = await SyncRepo.findMutation(trx, {
           userId,
           deviceId,
-          change.mutationId,
-          trx,
-        );
+          mutationId: change.mutationId,
+        });
         if (previous) {
           const matchesOriginalMutation =
             previous.entityType === change.entityType &&
@@ -79,17 +79,16 @@ export const SyncService = {
           continue;
         }
 
-        const current = await TaskRepo.findByIdIncludingDeletedForUpdate(
+        const current = await TaskRepo.findByIdIncludingDeletedForUpdate(trx, {
           userId,
-          change.entityId,
-          trx,
-        );
-        const currentVersion = Number(current?.sync_version ?? 0);
+          taskId: change.entityId,
+        });
+        const currentVersion = Number(current?.syncVersion ?? 0);
         const isConflict =
           change.op === "create"
             ? current != null
             : current == null ||
-              current.deleted_at != null ||
+              current.deletedAt != null ||
               currentVersion > change.baseVersion;
 
         if (isConflict) {
@@ -99,55 +98,49 @@ export const SyncService = {
             entityId: change.entityId,
             op: change.op,
             status: "conflict",
-            serverVersion: current?.sync_version ?? lastVersion,
-            serverEntity: current && !current.deleted_at ? current : null,
+            serverVersion: current?.syncVersion ?? lastVersion,
+            serverEntity: current && !current.deletedAt ? current : null,
           });
           continue;
         }
 
-        const version = await SyncRepo.nextVersion(userId, trx);
+        const version = await SyncRepo.nextVersion(trx, { userId });
         const patch = sanitizeTaskPatch(change.patch);
-        let serverEntity: TaskRow | null | undefined = null;
+        let serverEntity: Task | null | undefined = null;
 
         if (change.op === "create") {
-          serverEntity = await TaskRepo.createWithId(
+          serverEntity = await TaskRepo.createWithId(trx, {
             userId,
-            change.entityId,
-            patch,
-            version,
-            trx,
-          );
+            taskId: change.entityId,
+            task: patch as TaskPatch & { title: string },
+            syncVersion: version,
+          });
         } else if (change.op === "update") {
-          serverEntity = await TaskRepo.updateForSync(
+          serverEntity = await TaskRepo.updateForSync(trx, {
             userId,
-            change.entityId,
+            taskId: change.entityId,
             patch,
-            version,
-            trx,
-          );
+            syncVersion: version,
+          });
         } else {
-          await TaskRepo.softDeleteForSync(
+          await TaskRepo.softDeleteForSync(trx, {
             userId,
-            change.entityId,
-            new Date().toISOString(),
-            version,
-            trx,
-          );
+            taskId: change.entityId,
+            deletedAt: new Date().toISOString(),
+            syncVersion: version,
+          });
         }
 
-        await SyncRepo.recordChange(
-          {
-            userId,
-            deviceId,
-            mutationId: change.mutationId,
-            entityType: change.entityType,
-            entityId: change.entityId,
-            op: change.op,
-            version,
-            payload: change.op === "delete" ? null : serverEntity,
-          },
-          trx,
-        );
+        await SyncRepo.recordChange(trx, {
+          userId,
+          deviceId,
+          mutationId: change.mutationId,
+          entityType: change.entityType,
+          entityId: change.entityId,
+          op: change.op,
+          version,
+          payload: change.op === "delete" ? null : serverEntity,
+        });
         didWrite = true;
 
         results.push({

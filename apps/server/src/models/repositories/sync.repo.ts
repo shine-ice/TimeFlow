@@ -1,13 +1,23 @@
 import { randomUUID } from "crypto";
 import type { Knex } from "knex";
-import { db } from "../../db/knex";
-import { SyncChangeCreateInput } from "../types/sync.type";
+import type {
+  SyncChangeCreateInput,
+  SyncChangeDbRow,
+  SyncUserVersionDbRow,
+} from "../types/sync.type";
 
 type DbExecutor = Knex | Knex.Transaction;
 
+type UserIdentity = {
+  userId: string;
+};
+
 export const SyncRepo = {
-  async ensureUserVersionRow(userId: string, executor: DbExecutor = db) {
-    await executor("sync_user_versions")
+  async ensureUserVersionRow(
+    executor: DbExecutor,
+    { userId }: UserIdentity,
+  ) {
+    await executor<SyncUserVersionDbRow>("sync_user_versions")
       .insert({
         user_id: userId,
         last_version: 0,
@@ -17,37 +27,40 @@ export const SyncRepo = {
       .ignore();
   },
 
-  async getLastVersion(userId: string, executor: DbExecutor = db) {
-    const row = await executor("sync_user_versions")
+  async getLastVersion(executor: DbExecutor, { userId }: UserIdentity) {
+    const row = await executor<SyncUserVersionDbRow>("sync_user_versions")
       .where("user_id", userId)
       .first();
     return Number(row?.last_version ?? 0);
   },
 
-  async lockUserVersion(userId: string, executor: Knex.Transaction) {
-    await this.ensureUserVersionRow(userId, executor);
-    const row = await executor("sync_user_versions")
+  async lockUserVersion(
+    executor: Knex.Transaction,
+    { userId }: UserIdentity,
+  ) {
+    await this.ensureUserVersionRow(executor, { userId });
+    const row = await executor<SyncUserVersionDbRow>("sync_user_versions")
       .where("user_id", userId)
       .forUpdate()
       .first();
     return Number(row?.last_version ?? 0);
   },
 
-  async nextVersion(userId: string, executor: DbExecutor = db) {
-    await this.ensureUserVersionRow(userId, executor);
-    await executor("sync_user_versions")
+  async nextVersion(executor: DbExecutor, { userId }: UserIdentity) {
+    await this.ensureUserVersionRow(executor, { userId });
+    await executor<SyncUserVersionDbRow>("sync_user_versions")
       .where("user_id", userId)
       .increment("last_version", 1)
       .update({ updated_at: new Date().toISOString() });
-    return this.getLastVersion(userId, executor);
+    return this.getLastVersion(executor, { userId });
   },
 
   async recordChange(
+    executor: DbExecutor,
     change: SyncChangeCreateInput,
-    executor: DbExecutor = db,
   ) {
     const id = randomUUID();
-    await executor("sync_changes").insert({
+    await executor<SyncChangeDbRow>("sync_changes").insert({
       id,
       user_id: change.userId,
       entity_type: change.entityType,
@@ -63,12 +76,14 @@ export const SyncRepo = {
   },
 
   async findMutation(
-    userId: string,
-    deviceId: string,
-    mutationId: string,
-    executor: DbExecutor = db,
+    executor: DbExecutor,
+    {
+      userId,
+      deviceId,
+      mutationId,
+    }: UserIdentity & { deviceId: string; mutationId: string },
   ) {
-    const row = await executor("sync_changes")
+    const row = await executor<SyncChangeDbRow>("sync_changes")
       .where({
         user_id: userId,
         device_id: deviceId,
@@ -85,8 +100,15 @@ export const SyncRepo = {
     };
   },
 
-  async pullSince(userId: string, sinceVersion: number, pageSize: number) {
-    const rows = await db("sync_changes")
+  async pullSince(
+    executor: DbExecutor,
+    {
+      userId,
+      sinceVersion,
+      pageSize,
+    }: UserIdentity & { sinceVersion: number; pageSize: number },
+  ) {
+    const rows = await executor<SyncChangeDbRow>("sync_changes")
       .where("user_id", userId)
       .where("version", ">", sinceVersion)
       .orderBy("version", "asc")

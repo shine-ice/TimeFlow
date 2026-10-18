@@ -1,34 +1,45 @@
 import { randomUUID } from "crypto";
 import type { Knex } from "knex";
+import { db } from "../db/knex";
 import { runTransaction } from "../db/transaction";
 import { ApiError, ApiCode } from "../utils/errors";
 import { TaskRepo } from "../models/repositories/task.repo";
 import { SyncRepo } from "../models/repositories/sync.repo";
-import { TaskRow } from "../models/types/task.type";
+import type {
+  Task,
+  TaskCreateInput,
+  TaskPatch,
+} from "../models/types/task.type";
 import { WsHub } from "../ws/hub";
 
 async function recordTaskChange(
   trx: Knex.Transaction,
-  userId: string,
-  deviceId: string,
-  entityId: string,
-  op: "create" | "update" | "delete",
-  version: number,
-  payload: TaskRow | null | undefined,
+  {
+    userId,
+    deviceId,
+    entityId,
+    op,
+    version,
+    payload,
+  }: {
+    userId: string;
+    deviceId: string;
+    entityId: string;
+    op: "create" | "update" | "delete";
+    version: number;
+    payload: Task | null | undefined;
+  },
 ) {
-  await SyncRepo.recordChange(
-    {
-      userId,
-      deviceId,
-      mutationId: randomUUID(),
-      entityType: "task",
-      entityId,
-      op,
-      version,
-      payload,
-    },
-    trx,
-  );
+  await SyncRepo.recordChange(trx, {
+    userId,
+    deviceId,
+    mutationId: randomUUID(),
+    entityType: "task",
+    entityId,
+    op,
+    version,
+    payload,
+  });
 }
 
 function broadcastTaskChange(userId: string, deviceId: string, version: number) {
@@ -41,40 +52,38 @@ function broadcastTaskChange(userId: string, deviceId: string, version: number) 
 
 export const TaskService = {
   async getById(userId: string, taskId: string) {
-    const task = await TaskRepo.findById(userId, taskId);
+    const task = await TaskRepo.findById(db, { userId, taskId });
     if (!task) throw new ApiError(ApiCode.TASK_NOT_FOUND);
     return { ...task };
   },
 
   async pageByUserId(userId: string, page: number = 1, pageSize: number = 10) {
-    return TaskRepo.listByUserId(userId, page, pageSize);
+    return TaskRepo.listByUserId(db, { userId, page, pageSize });
   },
 
   async insert(
     userId: string,
-    task: Partial<TaskRow>,
+    task: TaskCreateInput,
     deviceId = "server-api",
   ) {
     const result = await runTransaction(async (trx) => {
-      await SyncRepo.lockUserVersion(userId, trx);
+      await SyncRepo.lockUserVersion(trx, { userId });
       const taskId = randomUUID();
-      const version = await SyncRepo.nextVersion(userId, trx);
-      const entity = await TaskRepo.createWithId(
+      const version = await SyncRepo.nextVersion(trx, { userId });
+      const entity = await TaskRepo.createWithId(trx, {
         userId,
         taskId,
         task,
-        version,
-        trx,
-      );
-      await recordTaskChange(
-        trx,
+        syncVersion: version,
+      });
+      await recordTaskChange(trx, {
         userId,
         deviceId,
-        taskId,
-        "create",
+        entityId: taskId,
+        op: "create",
         version,
-        entity,
-      );
+        payload: entity,
+      });
       return { entity: entity!, version };
     });
     broadcastTaskChange(userId, deviceId, result.version);
@@ -84,30 +93,28 @@ export const TaskService = {
   async patch(
     userId: string,
     taskId: string,
-    patch: Partial<TaskRow>,
+    patch: TaskPatch,
     deviceId = "server-api",
   ) {
     const result = await runTransaction(async (trx) => {
-      await SyncRepo.lockUserVersion(userId, trx);
-      const current = await TaskRepo.findById(userId, taskId, trx);
+      await SyncRepo.lockUserVersion(trx, { userId });
+      const current = await TaskRepo.findById(trx, { userId, taskId });
       if (!current) throw new ApiError(ApiCode.TASK_NOT_FOUND);
-      const version = await SyncRepo.nextVersion(userId, trx);
-      const entity = await TaskRepo.updateForSync(
+      const version = await SyncRepo.nextVersion(trx, { userId });
+      const entity = await TaskRepo.updateForSync(trx, {
         userId,
         taskId,
         patch,
-        version,
-        trx,
-      );
-      await recordTaskChange(
-        trx,
+        syncVersion: version,
+      });
+      await recordTaskChange(trx, {
         userId,
         deviceId,
-        taskId,
-        "update",
+        entityId: taskId,
+        op: "update",
         version,
-        entity,
-      );
+        payload: entity,
+      });
       return { entity: entity!, version };
     });
     broadcastTaskChange(userId, deviceId, result.version);
@@ -116,26 +123,24 @@ export const TaskService = {
 
   async remove(userId: string, taskId: string, deviceId = "server-api") {
     const version = await runTransaction(async (trx) => {
-      await SyncRepo.lockUserVersion(userId, trx);
-      const current = await TaskRepo.findById(userId, taskId, trx);
+      await SyncRepo.lockUserVersion(trx, { userId });
+      const current = await TaskRepo.findById(trx, { userId, taskId });
       if (!current) throw new ApiError(ApiCode.TASK_NOT_FOUND);
-      const version = await SyncRepo.nextVersion(userId, trx);
-      await TaskRepo.softDeleteForSync(
+      const version = await SyncRepo.nextVersion(trx, { userId });
+      await TaskRepo.softDeleteForSync(trx, {
         userId,
         taskId,
-        new Date().toISOString(),
-        version,
-        trx,
-      );
-      await recordTaskChange(
-        trx,
+        deletedAt: new Date().toISOString(),
+        syncVersion: version,
+      });
+      await recordTaskChange(trx, {
         userId,
         deviceId,
-        taskId,
-        "delete",
+        entityId: taskId,
+        op: "delete",
         version,
-        null,
-      );
+        payload: null,
+      });
       return version;
     });
     broadcastTaskChange(userId, deviceId, version);
