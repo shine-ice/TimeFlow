@@ -23,7 +23,7 @@ export const TaskController = {
   async insert(req: Request, res: Response) {
     const userId = req.auth!.userId;
     const task = createSchema.parse(req.body);
-    const inserted = await TaskService.insert(userId, task);
+    const inserted = await TaskService.insert(userId, task, req.auth!.deviceId);
     return res.json(ok(inserted));
   },
 
@@ -31,14 +31,14 @@ export const TaskController = {
     const userId = req.auth!.userId;
     const id = req.params.id as string;
     const patch = patchSchema.parse(req.body);
-    const updated = await TaskService.patch(userId, id, patch);
+    const updated = await TaskService.patch(userId, id, patch, req.auth!.deviceId);
     return res.json(ok(updated));
   },
 
   async remove(req: Request, res: Response) {
     const userId = req.auth!.userId;
     const id = req.params.id as string;
-    const deleted = await TaskService.remove(userId, id);
+    const deleted = await TaskService.remove(userId, id, req.auth!.deviceId);
     return res.json(ok(deleted));
   },
 };

@@ -1,12 +1,35 @@
-import { randomUUID } from "crypto";
+import type { Knex } from "knex";
 import { db } from "../../db/knex";
 import { TaskRow } from "../types/task.type";
 
+type DbExecutor = Knex | Knex.Transaction;
+
 export const TaskRepo = {
-  async findById(userId: string, taskId: string) {
-    return await db<TaskRow>("tasks")
+  async findById(userId: string, taskId: string, executor: DbExecutor = db) {
+    return await executor<TaskRow>("tasks")
       .where({ user_id: userId, id: taskId })
       .whereNull("deleted_at")
+      .first();
+  },
+
+  async findByIdIncludingDeleted(
+    userId: string,
+    taskId: string,
+    executor: DbExecutor = db,
+  ) {
+    return await executor<TaskRow>("tasks")
+      .where({ user_id: userId, id: taskId })
+      .first();
+  },
+
+  async findByIdIncludingDeletedForUpdate(
+    userId: string,
+    taskId: string,
+    executor: Knex.Transaction,
+  ) {
+    return executor<TaskRow>("tasks")
+      .where({ user_id: userId, id: taskId })
+      .forUpdate()
       .first();
   },
 
@@ -31,26 +54,62 @@ export const TaskRepo = {
     };
   },
 
-  async create(userId: string, task: Partial<TaskRow>) {
-    const id = randomUUID();
+  async createWithId(
+    userId: string,
+    taskId: string,
+    task: Partial<TaskRow>,
+    syncVersion: number,
+    executor: DbExecutor = db,
+  ) {
     const now = new Date().toISOString();
-    task.id = id;
-    task.created_at = now;
-    task.updated_at = now;
-    const ret = await db<TaskRow>("tasks").insert({ ...task, user_id: userId });
-    return db<TaskRow>("tasks").where({ id }).first();
+    await executor<TaskRow>("tasks").insert({
+      ...task,
+      id: taskId,
+      user_id: userId,
+      description: task.description ?? "",
+      is_completed: task.is_completed ?? 0,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      sync_version: syncVersion,
+    });
+    return executor<TaskRow>("tasks")
+      .where({ user_id: userId, id: taskId })
+      .first();
   },
 
-  async update(userId: string, taskId: string, patch: Partial<TaskRow>) {
+  async updateForSync(
+    userId: string,
+    taskId: string,
+    patch: Partial<TaskRow>,
+    syncVersion: number,
+    executor: DbExecutor = db,
+  ) {
     const now = new Date().toISOString();
-    return await db<TaskRow>("tasks")
+    const updated = await executor<TaskRow>("tasks")
       .where({ user_id: userId, id: taskId })
-      .update({ ...patch, updated_at: now });
+      .whereNull("deleted_at")
+      .update({ ...patch, updated_at: now, sync_version: syncVersion });
+    if (!updated) return undefined;
+    return executor<TaskRow>("tasks")
+      .where({ user_id: userId, id: taskId })
+      .first();
   },
 
-  async softDelete(userId: string, taskId: string, deletedAt: string) {
-    return await db<TaskRow>("tasks")
+  async softDeleteForSync(
+    userId: string,
+    taskId: string,
+    deletedAt: string,
+    syncVersion: number,
+    executor: DbExecutor = db,
+  ) {
+    return executor<TaskRow>("tasks")
       .where({ user_id: userId, id: taskId })
-      .update({ deleted_at: deletedAt });
+      .whereNull("deleted_at")
+      .update({
+        deleted_at: deletedAt,
+        updated_at: deletedAt,
+        sync_version: syncVersion,
+      });
   },
 };

@@ -8,6 +8,8 @@ export type SyncChangeRow = {
   changed_at: string;
   version: number;
   payload_json: string;
+  device_id?: string | null;
+  mutation_id?: string | null;
 };
 
 export type SyncUserVersionRow = {
@@ -17,3 +19,13 @@ export type SyncUserVersionRow = {
 };
 
 // api
+export type SyncChangeCreateInput = {
+  userId: string;
+  entityType: string;
+  entityId: string;
+  op: string;
+  version: number;
+  payload: any;
+  deviceId: string;
+  mutationId: string;
+};

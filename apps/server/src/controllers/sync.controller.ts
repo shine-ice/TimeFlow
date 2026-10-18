@@ -1,15 +1,12 @@
 import { Request, Response } from "express";
 import { SyncService } from "../services/sync.service";
-import z from "zod";
+import { pullSchema, pushSchema } from "../models/schemas/sync.schema";
+import { ApiCode, ApiError } from "../utils/errors";
 
 export const SyncController = {
   async pull(req: Request, res: Response) {
     const userId = req.auth!.userId;
-    const schema = z.object({
-      sinceVersion: z.number().int(),
-      pageSize: z.number().int().max(500).default(200),
-    });
-    const input = schema.parse(req.body);
+    const input = pullSchema.parse(req.body);
 
     const out = await SyncService.pull(
       userId,
@@ -19,5 +16,14 @@ export const SyncController = {
     return res.json({ ...out, serverTime: new Date().toISOString() });
   },
 
-  async push(req: Request, res: Response) {},
+  async push(req: Request, res: Response) {
+    const userId = req.auth!.userId;
+    const deviceId = req.auth!.deviceId;
+    if (!deviceId) {
+      throw new ApiError(ApiCode.AUTH_UNAUTHORIZED, "Device id is required");
+    }
+    const input = pushSchema.parse(req.body);
+    const out = await SyncService.push(userId, deviceId, input.changes);
+    return res.json({ ...out, serverTime: new Date().toISOString() });
+  },
 };

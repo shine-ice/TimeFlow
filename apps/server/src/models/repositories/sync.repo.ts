@@ -1,37 +1,88 @@
 import { randomUUID } from "crypto";
+import type { Knex } from "knex";
 import { db } from "../../db/knex";
-import { SyncChangeRow } from "../types/sync.type";
+import { SyncChangeCreateInput } from "../types/sync.type";
+
+type DbExecutor = Knex | Knex.Transaction;
 
 export const SyncRepo = {
-  async ensureUserVersionRow(userId: string) {
-    const row = await db("sync_user_versions").where("user_id", userId).first();
-    if (!row) {
-      await db("sync_user_versions").insert({
+  async ensureUserVersionRow(userId: string, executor: DbExecutor = db) {
+    await executor("sync_user_versions")
+      .insert({
         user_id: userId,
         last_version: 0,
         updated_at: new Date().toISOString(),
-      });
-    }
+      })
+      .onConflict("user_id")
+      .ignore();
   },
 
-  async nextVersion(userId: string) {
-    await this.ensureUserVersionRow(userId);
-    const row = await db("sync_user_versions").where("user_id", userId).first();
-    const next = Number(row.last_version) + 1;
-
-    await db("sync_user_versions").where("user_id", userId).update({
-      last_version: next,
-      updated_at: new Date().toISOString(),
-    });
-
-    return next;
+  async getLastVersion(userId: string, executor: DbExecutor = db) {
+    const row = await executor("sync_user_versions")
+      .where("user_id", userId)
+      .first();
+    return Number(row?.last_version ?? 0);
   },
 
-  async recordChange(change: SyncChangeRow) {
+  async lockUserVersion(userId: string, executor: Knex.Transaction) {
+    await this.ensureUserVersionRow(userId, executor);
+    const row = await executor("sync_user_versions")
+      .where("user_id", userId)
+      .forUpdate()
+      .first();
+    return Number(row?.last_version ?? 0);
+  },
+
+  async nextVersion(userId: string, executor: DbExecutor = db) {
+    await this.ensureUserVersionRow(userId, executor);
+    await executor("sync_user_versions")
+      .where("user_id", userId)
+      .increment("last_version", 1)
+      .update({ updated_at: new Date().toISOString() });
+    return this.getLastVersion(userId, executor);
+  },
+
+  async recordChange(
+    change: SyncChangeCreateInput,
+    executor: DbExecutor = db,
+  ) {
     const id = randomUUID();
-    change.id = id;
-    await db("sync_changes").insert(change);
+    await executor("sync_changes").insert({
+      id,
+      user_id: change.userId,
+      entity_type: change.entityType,
+      entity_id: change.entityId,
+      op: change.op,
+      version: change.version,
+      payload_json: JSON.stringify(change.payload),
+      changed_at: new Date().toISOString(),
+      device_id: change.deviceId,
+      mutation_id: change.mutationId,
+    });
     return id;
+  },
+
+  async findMutation(
+    userId: string,
+    deviceId: string,
+    mutationId: string,
+    executor: DbExecutor = db,
+  ) {
+    const row = await executor("sync_changes")
+      .where({
+        user_id: userId,
+        device_id: deviceId,
+        mutation_id: mutationId,
+      })
+      .first();
+    if (!row) return undefined;
+    return {
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      op: row.op,
+      version: Number(row.version),
+      payload: row.payload_json ? JSON.parse(row.payload_json) : null,
+    };
   },
 
   async pullSince(userId: string, sinceVersion: number, pageSize: number) {
@@ -39,24 +90,28 @@ export const SyncRepo = {
       .where("user_id", userId)
       .where("version", ">", sinceVersion)
       .orderBy("version", "asc")
-      .limit(pageSize);
+      .limit(pageSize + 1);
 
-    const changes = rows.map((row) => ({
+    const hasMore = rows.length > pageSize;
+    const page = rows.slice(0, pageSize);
+
+    const changes = page.map((row) => ({
       version: row.version,
       entityType: row.entity_type,
       entityId: row.entity_id,
       op: row.op,
       changedAt: row.changed_at,
-      payloadJson: row.payload_json ? JSON.parse(row.payload_json) : null,
+      payload: row.payload_json ? JSON.parse(row.payload_json) : null,
     }));
 
     const nextSinceVersion = changes.length
       ? changes[changes.length - 1].version
       : sinceVersion;
+
     return {
       changes,
       nextSinceVersion,
-      hasMore: rows.length === pageSize,
+      hasMore,
     };
   },
 };

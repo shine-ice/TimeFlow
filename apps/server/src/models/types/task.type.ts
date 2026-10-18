@@ -10,4 +10,5 @@ export type TaskRow = {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  sync_version: number;
 };
