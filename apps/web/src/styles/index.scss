@@ -24,6 +24,8 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --sidebar-bg: #f4f3ec;
+  --sidebar-width: 80px;
 
   @media (max-width: 1024px) {
     font-size: 16px;
@@ -157,7 +159,7 @@ code {
 }
 
 #app {
-  width: 1126px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;

@@ -1,5 +1,8 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
+import { taskRoutes } from "@/modules/tasks/routes";
+import { calendarRoutes } from "@/modules/calendar/routes.ts";
+import { timelineRoutes } from "@/modules/timeline/routes.ts";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -7,7 +10,8 @@ const router = createRouter({
     {
       path: "/",
       name: "home",
-      component: () => import("../views/HomeView.vue"),
+      component: () => import("../layouts/LMain.vue"),
+      children: [...taskRoutes, ...calendarRoutes, ...timelineRoutes],
     },
     {
       path: "/login",
