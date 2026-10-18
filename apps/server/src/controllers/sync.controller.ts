@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SyncService } from "../services/sync.service";
 import { pullSchema, pushSchema } from "../models/schemas/sync.schema";
-import { ApiCode, ApiError } from "../utils/errors";
+import { ApiCode, ApiError, ok } from "../utils/errors";
 
 export const SyncController = {
   async pull(req: Request, res: Response) {
@@ -13,7 +13,7 @@ export const SyncController = {
       input.sinceVersion,
       input.pageSize,
     );
-    return res.json({ ...out, serverTime: new Date().toISOString() });
+    return res.json(ok({ ...out, serverTime: new Date().toISOString() }));
   },
 
   async push(req: Request, res: Response) {
@@ -24,6 +24,6 @@ export const SyncController = {
     }
     const input = pushSchema.parse(req.body);
     const out = await SyncService.push(userId, deviceId, input.changes);
-    return res.json({ ...out, serverTime: new Date().toISOString() });
+    return res.json(ok({ ...out, serverTime: new Date().toISOString() }));
   },
 };
