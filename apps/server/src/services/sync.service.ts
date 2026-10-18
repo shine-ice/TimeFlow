@@ -1,11 +1,15 @@
-import type { Knex } from "knex";
 import { db } from "../db/knex";
 import { runTransaction } from "../db/transaction";
 import { SyncRepo } from "../models/repositories/sync.repo";
-import { TaskRepo } from "../models/repositories/task.repo";
 import type { SyncEntityType } from "../models/types/sync.type";
-import type { Task, TaskPatch } from "../models/types/task.type";
 import { WsHub } from "../ws/hub";
+import type {
+  SyncEntityHandler,
+  SyncEntityHandlers,
+} from "./sync-entity-handler";
+import { TaskSyncHandler } from "./task-sync.handler";
+
+export type { SyncEntityHandler, SyncEntityHandlers } from "./sync-entity-handler";
 
 export type PushChange = {
   mutationId: string;
@@ -17,97 +21,8 @@ export type PushChange = {
   patch?: unknown;
 };
 
-type SyncEntityState = {
-  syncVersion: number;
-  deletedAt?: string | null;
-};
-
-type EntityIdentity = {
-  userId: string;
-  entityId: string;
-};
-
-type ApplyChangeParams = EntityIdentity & {
-  op: PushChange["op"];
-  patch: unknown;
-  version: number;
-};
-
-export type SyncEntityHandler = {
-  findCurrent(
-    trx: Knex.Transaction,
-    identity: EntityIdentity,
-  ): Promise<SyncEntityState | undefined>;
-  sanitizePatch(patch: unknown): unknown;
-  apply(trx: Knex.Transaction, change: ApplyChangeParams): Promise<unknown>;
-};
-
-export type SyncEntityHandlers = Partial<
-  Record<SyncEntityType, SyncEntityHandler>
->;
-
-const writableTaskFields = [
-  "title",
-  "description",
-  "startAt",
-  "endAt",
-  "isCompleted",
-  "completedAt",
-] as const;
-
-function sanitizeTaskPatch(patch: TaskPatch | undefined) {
-  const clean: TaskPatch = {};
-  for (const field of writableTaskFields) {
-    if (patch?.[field] !== undefined) clean[field] = patch[field] as never;
-  }
-  return clean;
-}
-
-const taskHandler: SyncEntityHandler = {
-  findCurrent(trx, { userId, entityId }) {
-    return TaskRepo.findByIdIncludingDeletedForUpdate(trx, {
-      userId,
-      taskId: entityId,
-    });
-  },
-
-  sanitizePatch(patch) {
-    return sanitizeTaskPatch(patch as TaskPatch | undefined);
-  },
-
-  async apply(trx, { userId, entityId, op, patch, version }) {
-    const taskPatch = patch as TaskPatch;
-    let serverEntity: Task | null | undefined = null;
-
-    if (op === "create") {
-      serverEntity = await TaskRepo.createWithId(trx, {
-        userId,
-        taskId: entityId,
-        task: taskPatch as TaskPatch & { title: string },
-        syncVersion: version,
-      });
-    } else if (op === "update") {
-      serverEntity = await TaskRepo.updateForSync(trx, {
-        userId,
-        taskId: entityId,
-        patch: taskPatch,
-        syncVersion: version,
-      });
-    } else {
-      await TaskRepo.softDeleteForSync(trx, {
-        userId,
-        taskId: entityId,
-        deletedAt: new Date().toISOString(),
-        syncVersion: version,
-      });
-    }
-
-    return serverEntity;
-  },
-};
-
 const defaultEntityHandlers: SyncEntityHandlers = {
-  task: taskHandler,
+  task: TaskSyncHandler,
 };
 
 export function createSyncService(
