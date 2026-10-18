@@ -1,3 +1,7 @@
+export const syncEntityTypes = ["task", "list", "habit", "tag"] as const;
+
+export type SyncEntityType = (typeof syncEntityTypes)[number];
+
 // db
 export type SyncChangeDbRow = {
   id: string;

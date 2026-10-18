@@ -1,11 +1,16 @@
 import { z } from "zod";
+import { syncEntityTypes } from "../types/sync.type";
 
-const identityFields = {
+const baseIdentityFields = {
   mutationId: z.string().uuid(),
-  entityType: z.literal("task"),
   entityId: z.string().uuid(),
   baseVersion: z.number().int().nonnegative(),
   clientUpdatedAt: z.string().datetime().optional(),
+};
+
+const taskIdentityFields = {
+  ...baseIdentityFields,
+  entityType: z.literal("task"),
 };
 
 const optionalTaskFields = {
@@ -18,7 +23,7 @@ const optionalTaskFields = {
 
 const createChangeSchema = z
   .object({
-    ...identityFields,
+    ...taskIdentityFields,
     op: z.literal("create"),
     patch: z
       .object({
@@ -41,7 +46,7 @@ const updatePatchSchema = z
 
 const updateChangeSchema = z
   .object({
-    ...identityFields,
+    ...taskIdentityFields,
     op: z.literal("update"),
     patch: updatePatchSchema,
   })
@@ -49,21 +54,59 @@ const updateChangeSchema = z
 
 const deleteChangeSchema = z
   .object({
-    ...identityFields,
+    ...taskIdentityFields,
     op: z.literal("delete"),
   })
   .strict();
 
+const reservedEntityTypes = syncEntityTypes.filter(
+  (entityType) => entityType !== "task",
+) as ["list", "habit", "tag"];
+
+const reservedIdentityFields = {
+  ...baseIdentityFields,
+  entityType: z.enum(reservedEntityTypes),
+};
+
+const reservedPatchSchema = z
+  .record(z.string(), z.unknown())
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "Patch must contain at least one field",
+  });
+
+const reservedChangeSchema = z.discriminatedUnion("op", [
+  z
+    .object({
+      ...reservedIdentityFields,
+      op: z.literal("create"),
+      patch: reservedPatchSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...reservedIdentityFields,
+      op: z.literal("update"),
+      patch: reservedPatchSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...reservedIdentityFields,
+      op: z.literal("delete"),
+    })
+    .strict(),
+]);
+
+const taskChangeSchema = z.discriminatedUnion("op", [
+  createChangeSchema,
+  updateChangeSchema,
+  deleteChangeSchema,
+]);
+
 export const pushSchema = z
   .object({
     changes: z
-      .array(
-        z.discriminatedUnion("op", [
-          createChangeSchema,
-          updateChangeSchema,
-          deleteChangeSchema,
-        ]),
-      )
+      .array(z.union([taskChangeSchema, reservedChangeSchema]))
       .min(1)
       .max(500),
   })
