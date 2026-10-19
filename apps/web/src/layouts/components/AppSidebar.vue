@@ -73,7 +73,7 @@ const router = useRouter();
       width: 4rem;
       border-radius: 1rem;
       padding: 0;
-      background-color: #fff;
+      background-color: var(--color-surface);
 
       .el-menu-tooltip__trigger {
         border-radius: 1rem;

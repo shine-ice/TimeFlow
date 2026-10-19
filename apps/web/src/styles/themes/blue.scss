@@ -1,0 +1,29 @@
+[data-theme='blue'] {
+  color-scheme: light;
+
+  --color-app-bg: #f3f8fc;
+  --color-surface: #fff;
+  --color-surface-raised: #fff;
+  --color-surface-muted: #eaf3fa;
+  --color-sidebar-bg: #e7f1f8;
+  --color-text: #34495b;
+  --color-text-strong: #142f43;
+  --color-text-muted: #607b90;
+  --color-text-on-primary: #fff;
+  --color-border: #cbdce8;
+  --color-border-muted: #dce8f0;
+  --color-primary: #1677b8;
+  --color-primary-hover: #3290cd;
+  --color-primary-soft: #dceefa;
+  --color-primary-active: #0c5f98;
+  --color-focus: #1677b8;
+  --color-mask: rgb(20 47 67 / 45%);
+  --shadow-sm: 0 1px 3px rgb(20 47 67 / 10%);
+  --shadow-md: 0 8px 24px rgb(20 47 67 / 12%);
+
+  --accent-bg: var(--color-primary-soft);
+  --accent-border: var(--color-primary-hover);
+  --code-bg: var(--color-surface-muted);
+  --social-bg: var(--color-surface-muted);
+  --shadow: var(--shadow-md);
+}

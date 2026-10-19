@@ -1,0 +1,30 @@
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --color-app-bg: #f7f8fa;
+  --color-surface: #fff;
+  --color-surface-raised: #fff;
+  --color-surface-muted: #f2f4f7;
+  --color-sidebar-bg: #f1f3f6;
+  --color-text: #344054;
+  --color-text-strong: #101828;
+  --color-text-muted: #667085;
+  --color-text-on-primary: #fff;
+  --color-border: #dfe3e8;
+  --color-border-muted: #eaecf0;
+  --color-primary: #6558d3;
+  --color-primary-hover: #8177df;
+  --color-primary-soft: #e9e7fb;
+  --color-primary-active: #5145b5;
+  --color-focus: #6558d3;
+  --color-mask: rgb(16 24 40 / 45%);
+  --shadow-sm: 0 1px 3px rgb(16 24 40 / 10%);
+  --shadow-md: 0 8px 24px rgb(16 24 40 / 12%);
+
+  --accent-bg: var(--color-primary-soft);
+  --accent-border: var(--color-primary-hover);
+  --code-bg: var(--color-surface-muted);
+  --social-bg: var(--color-surface-muted);
+  --shadow: var(--shadow-md);
+}

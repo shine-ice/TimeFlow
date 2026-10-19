@@ -1,0 +1,62 @@
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-app-bg: #17191f;
+  --color-surface: #20232b;
+  --color-surface-raised: #282c36;
+  --color-surface-muted: #292d37;
+  --color-sidebar-bg: #20232b;
+  --color-text: #d0d5dd;
+  --color-text-strong: #f2f4f7;
+  --color-text-muted: #98a2b3;
+  --color-text-on-primary: #fff;
+  --color-border: #383d49;
+  --color-border-muted: #303540;
+  --color-primary: #a69cf5;
+  --color-primary-hover: #bcb5fa;
+  --color-primary-soft: #39345f;
+  --color-primary-active: #8b80e8;
+  --color-focus: #bcb5fa;
+  --color-mask: rgb(0 0 0 / 62%);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 28%);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 32%);
+
+  --accent-bg: var(--color-primary-soft);
+  --accent-border: var(--color-primary-hover);
+  --code-bg: var(--color-surface-muted);
+  --social-bg: var(--color-surface-muted);
+  --shadow: var(--shadow-md);
+}
+
+/* Follow the OS only when the app or user has not chosen a theme explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --color-app-bg: #17191f;
+    --color-surface: #20232b;
+    --color-surface-raised: #282c36;
+    --color-surface-muted: #292d37;
+    --color-sidebar-bg: #20232b;
+    --color-text: #d0d5dd;
+    --color-text-strong: #f2f4f7;
+    --color-text-muted: #98a2b3;
+    --color-text-on-primary: #fff;
+    --color-border: #383d49;
+    --color-border-muted: #303540;
+    --color-primary: #a69cf5;
+    --color-primary-hover: #bcb5fa;
+    --color-primary-soft: #39345f;
+    --color-primary-active: #8b80e8;
+    --color-focus: #bcb5fa;
+    --color-mask: rgb(0 0 0 / 62%);
+    --shadow-sm: 0 1px 3px rgb(0 0 0 / 28%);
+    --shadow-md: 0 8px 24px rgb(0 0 0 / 32%);
+
+    --accent-bg: var(--color-primary-soft);
+    --accent-border: var(--color-primary-hover);
+    --code-bg: var(--color-surface-muted);
+    --social-bg: var(--color-surface-muted);
+    --shadow: var(--shadow-md);
+  }
+}
